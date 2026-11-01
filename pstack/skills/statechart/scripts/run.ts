@@ -191,21 +191,19 @@ const runToFiles = (
     });
   });
 
-// tla-ts runs TLC 1.7.4 in Node. TLA_TS_PACKAGE overrides the package that npx installs. JAVA or
-// TLA2TOOLS runs TLC with Java instead, as before.
+// tla-ts runs TLC 1.7.4 in Node. TLA_TS_PACKAGE overrides the package that npx installs. If npx
+// cannot install it, or JAVA or TLA2TOOLS is set, TLC runs with Java as before.
 async function findTlc(cwd: string) {
   const { TLA2TOOLS, JAVA, TLA_TS_PACKAGE: tlaTsPackage = TLA_TS_PACKAGE } = process.env;
+  let npxError = "";
   if (!JAVA && !TLA2TOOLS) {
     const r = await runChild(
       "npx",
       ["--yes", `--package=${tlaTsPackage}`, "--call", "command -v tla-ts"],
       { cwd, env: process.env },
     );
-    if (r.status !== 0)
-      throw new Error(
-        `Cannot find TLC: npx could not install ${tlaTsPackage}: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
-      );
-    return { command: r.stdout.trim(), args: ["-Dtla-ts.tlc=1.7.4"] };
+    if (r.status === 0) return { command: r.stdout.trim(), args: ["-Dtla-ts.tlc=1.7.4"] };
+    npxError = `npx could not install ${tlaTsPackage}: ${r.error?.message ?? r.stderr.trim()}\n`;
   }
   if (TLA2TOOLS) return { command: JAVA || "java", args: ["-cp", TLA2TOOLS] };
   const mise = (...args: string[]) =>
@@ -217,7 +215,7 @@ async function findTlc(cwd: string) {
     const r = await mise("install", JAVA_TOOL, TLC_TOOL);
     if (r.status !== 0)
       throw new Error(
-        `Cannot find TLC: mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
+        `Cannot find TLC: ${npxError}mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
       );
     found = await where();
   }
