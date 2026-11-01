@@ -18,7 +18,7 @@ Work in a scratch folder outside the repo. Write a TLA+ spec and its config. The
 
 `scripts/statechart.ts` is TypeScript, so run it with a runtime that can execute TypeScript.
 
-The skill runs TLC with [tla-ts](https://github.com/aidenybai/tla-ts), which reproduces TLC 1.7.4 in Node, so it needs no Java. The first run installs tla-ts with npx and needs the network. To run TLC with Java instead, set `TLA2TOOLS` to the path of tla2tools.jar and `JAVA` to a java binary (Java 11 or later), or set only `JAVA`, and mise installs TLC 1.7.4's jar.
+The skill runs TLC with [tla-ts](https://github.com/aidenybai/tla-ts) in Node. The first run installs it with npx and needs the network.
 
 ## Write the spec
 

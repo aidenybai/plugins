@@ -191,10 +191,8 @@ const runToFiles = (
     });
   });
 
-// TLC runs with tla-ts, which npx installs, and which reproduces TLC 1.7.4 without Java or its jar.
-// TLA_TS_PACKAGE names another tla-ts package for npx, such as a tarball. TLC runs with Java when
-// JAVA or TLA2TOOLS is set, and then mise installs TLC's jar and Java unless TLA2TOOLS names the
-// jar.
+// tla-ts runs TLC 1.7.4 in Node. TLA_TS_PACKAGE overrides the package that npx installs. JAVA or
+// TLA2TOOLS runs TLC with Java instead, as before.
 async function findTlc(cwd: string) {
   const { TLA2TOOLS, JAVA, TLA_TS_PACKAGE: tlaTsPackage = TLA_TS_PACKAGE } = process.env;
   if (!JAVA && !TLA2TOOLS) {
