@@ -67,6 +67,7 @@ export function* fileLines(file: string) {
 const TLC_TOOL =
   "http:tla2tools[url=https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar,checksum=sha256:936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88]@1.7.4";
 const JAVA_TOOL = "java@temurin-25";
+const TLA_TS_PACKAGE = "tla-ts@0.0.4";
 export const PINNED_FLAGS = ["-workers", "1", "-fp", "0", "-lncheck", "final"];
 
 type ChildResult = {
@@ -190,32 +191,41 @@ const runToFiles = (
     });
   });
 
-// TLA_TS names the tla-ts command, which runs in place of java unless JAVA names one. tla-ts
-// reproduces the TLC of the jar it is given, so the command still installs the jar, but not Java.
+// TLC runs with tla-ts, which npx installs, and which reproduces TLC 1.7.4 without Java or its jar.
+// TLA_TS_PACKAGE names another tla-ts package for npx, such as a tarball. TLC runs with Java when
+// JAVA or TLA2TOOLS is set, and then mise installs TLC's jar and Java unless TLA2TOOLS names the
+// jar.
 async function findTlc(cwd: string) {
-  const { TLA2TOOLS, JAVA, TLA_TS } = process.env;
-  if (TLA2TOOLS) return { jar: TLA2TOOLS, java: JAVA || TLA_TS || "java" };
-  const isJavaless = !JAVA && Boolean(TLA_TS);
-  const tools = isJavaless ? [TLC_TOOL] : [TLC_TOOL, JAVA_TOOL];
+  const { TLA2TOOLS, JAVA, TLA_TS_PACKAGE: tlaTsPackage = TLA_TS_PACKAGE } = process.env;
+  if (!JAVA && !TLA2TOOLS) {
+    const r = await runChild(
+      "npx",
+      ["--yes", `--package=${tlaTsPackage}`, "--call", "command -v tla-ts"],
+      { cwd, env: process.env },
+    );
+    if (r.status !== 0)
+      throw new Error(
+        `Cannot find TLC: npx could not install ${tlaTsPackage}: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
+      );
+    return { command: r.stdout.trim(), args: ["-Dtla-ts.tlc=1.7.4"] };
+  }
+  if (TLA2TOOLS) return { command: JAVA || "java", args: ["-cp", TLA2TOOLS] };
   const mise = (...args: string[]) =>
     runChild("mise", args, { cwd, env: { ...process.env, MISE_CEILING_PATHS: cwd } });
   const where = () =>
-    Promise.all([
-      mise("where", TLC_TOOL),
-      ...(isJavaless ? [] : [mise("which", "java", "--tool", JAVA_TOOL)]),
-    ]);
+    Promise.all([mise("where", TLC_TOOL), mise("which", "java", "--tool", JAVA_TOOL)]);
   let found = await where();
   if (found.some((r) => r.status !== 0)) {
-    const r = await mise("install", ...tools);
+    const r = await mise("install", JAVA_TOOL, TLC_TOOL);
     if (r.status !== 0)
       throw new Error(
-        `Cannot find TLC: mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later) or TLA_TS to the tla-ts command.`,
+        `Cannot find TLC: mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
       );
     found = await where();
   }
   return {
-    jar: path.join(found[0].stdout.trim(), "tla2tools.jar"),
-    java: JAVA || TLA_TS || found[1].stdout.trim(),
+    command: JAVA || found[1].stdout.trim(),
+    args: ["-cp", path.join(found[0].stdout.trim(), "tla2tools.jar")],
   };
 }
 
@@ -289,16 +299,8 @@ export async function check(specFile: string, configFile: string): Promise<Check
       const tmp = path.join(dir, `tmp-${name}`);
       fs.mkdirSync(tmp);
       return runToFiles(
-        tlc.java,
-        [
-          `-Djava.io.tmpdir=${tmp}`,
-          `-DTLA-Library=${folder}`,
-          ...jvm,
-          "-cp",
-          tlc.jar,
-          main,
-          ...args,
-        ],
+        tlc.command,
+        [`-Djava.io.tmpdir=${tmp}`, `-DTLA-Library=${folder}`, ...jvm, ...tlc.args, main, ...args],
         {
           cwd: dir,
           out: path.join(dir, name),
