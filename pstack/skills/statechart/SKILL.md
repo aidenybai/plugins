@@ -20,6 +20,8 @@ Work in a scratch folder outside the repo. Write a TLA+ spec and its config. The
 
 The first run installs TLC and Java with mise and needs the network.
 
+To run TLC with [tla-ts](https://github.com/aidenybai/tla-ts) rather than Java, set `TLA_TS` to the tla-ts command and leave `JAVA` unset, such as `TLA_TS=/path/to/tla-ts/packages/tla-ts/dist/cli.js`. The first run then installs only TLC's jar, which tells tla-ts which TLC to reproduce.
+
 ## Write the spec
 
 - Write each rule that the reader agrees to as an INVARIANT. A rule can be about a screen, a result, a stored value, or a message. If the model has no variable for a rule, add the variable. Never weaken a rule to make it hold.

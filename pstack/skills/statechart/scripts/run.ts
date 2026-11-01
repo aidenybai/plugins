@@ -190,25 +190,32 @@ const runToFiles = (
     });
   });
 
+// TLA_TS names the tla-ts command, which runs in place of java unless JAVA names one. tla-ts
+// reproduces the TLC of the jar it is given, so the command still installs the jar, but not Java.
 async function findTlc(cwd: string) {
-  const { TLA2TOOLS, JAVA } = process.env;
-  if (TLA2TOOLS) return { jar: TLA2TOOLS, java: JAVA || "java" };
+  const { TLA2TOOLS, JAVA, TLA_TS } = process.env;
+  if (TLA2TOOLS) return { jar: TLA2TOOLS, java: JAVA || TLA_TS || "java" };
+  const isJavaless = !JAVA && Boolean(TLA_TS);
+  const tools = isJavaless ? [TLC_TOOL] : [TLC_TOOL, JAVA_TOOL];
   const mise = (...args: string[]) =>
     runChild("mise", args, { cwd, env: { ...process.env, MISE_CEILING_PATHS: cwd } });
   const where = () =>
-    Promise.all([mise("where", TLC_TOOL), mise("which", "java", "--tool", JAVA_TOOL)]);
+    Promise.all([
+      mise("where", TLC_TOOL),
+      ...(isJavaless ? [] : [mise("which", "java", "--tool", JAVA_TOOL)]),
+    ]);
   let found = await where();
   if (found.some((r) => r.status !== 0)) {
-    const r = await mise("install", JAVA_TOOL, TLC_TOOL);
+    const r = await mise("install", ...tools);
     if (r.status !== 0)
       throw new Error(
-        `Cannot find TLC: mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later).`,
+        `Cannot find TLC: mise install failed: ${r.error?.message ?? r.stderr.trim()}\nOr set TLA2TOOLS to the path of tla2tools.jar, and JAVA to a java binary (Java 11 or later) or TLA_TS to the tla-ts command.`,
       );
     found = await where();
   }
   return {
     jar: path.join(found[0].stdout.trim(), "tla2tools.jar"),
-    java: JAVA || found[1].stdout.trim(),
+    java: JAVA || TLA_TS || found[1].stdout.trim(),
   };
 }
 
